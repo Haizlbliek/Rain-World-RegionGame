@@ -2,6 +2,7 @@ const region = document.getElementById("region");
 
 region.onchange = () => {
 	loadRegion(region.value.toLowerCase());
+	region.blur();
 }
 
 const canvas = document.getElementById("canvas");
@@ -231,6 +232,9 @@ function update() {
 	}
 	if ("Space" in keys) {
 		for (let room of map.rooms) {
+			if (room != chosenRoom)
+				continue;
+
 			const left = room.devX;
 			const right = room.devX + room.width;
 			const top = -room.devY - room.height;
@@ -246,6 +250,9 @@ function update() {
 	}
 	if ("KeyQ" in keys) {
 		for (let room of map.rooms) {
+			if (room != chosenRoom)
+				continue;
+
 			const left = room.devX;
 			const right = room.devX + room.width;
 			const top = -room.devY - room.height;
@@ -376,3 +383,6 @@ function update() {
 	ctx.arc(canvas.width / 2, canvas.height / 2, 2.0, 0, Math.PI * 2.0);
 	ctx.fill();
 }
+
+region.selectedIndex = Math.floor(Math.random() * region.options.length);
+region.dispatchEvent(new Event("change"));
