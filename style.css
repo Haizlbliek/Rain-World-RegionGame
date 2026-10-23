@@ -1,0 +1,33 @@
+#canvas {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	width: 100vw;
+	height: 100vh;
+	background-color: black;
+}
+
+select {
+	position: relative;
+	z-index: 10;
+	background-color: #000000;
+	color: #ffffff;
+	padding: 8px 16px;
+	border: 1px solid #444444;
+	border-radius: 12px;
+	font-size: 1rem;
+	font-family: sans-serif;
+	cursor: pointer;
+	outline: none;
+}
+
+select:hover, select:focus {
+	border-color: #888888;
+}
+
+select option {
+	background-color: #000000;
+	color: #ffffff;
+}
