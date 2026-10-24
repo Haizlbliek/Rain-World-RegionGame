@@ -5,6 +5,12 @@ region.onchange = () => {
 	region.blur();
 }
 
+region.addEventListener("keydown", (event) => {
+	if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.code)) {
+		event.preventDefault();
+	}
+});
+
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
@@ -366,13 +372,14 @@ function update() {
 		ctx.rect(room.devX, -room.devY, room.width, -room.height);
 		ctx.stroke();
 	}
-	ctx.strokeStyle = "#ffffffba";
+
 	for (let conn of map.connections) {
 		ctx.beginPath();
 		let a = map.rooms.find(r => r.id.toLowerCase() == conn.a.toLowerCase());
 		let b = map.rooms.find(r => r.id.toLowerCase() == conn.b.toLowerCase());
 		ctx.moveTo(a.devX + conn.aX + 0.5, -a.devY - conn.aY - 0.5);
 		ctx.lineTo(b.devX + conn.bX + 0.5, -b.devY - conn.bY - 0.5);
+		ctx.strokeStyle = (a == chosenRoom || b == chosenRoom) ? "#ffffffba" : "#ffffff5a";
 		ctx.stroke();
 	}
 
