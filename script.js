@@ -6,7 +6,7 @@ region.onchange = () => {
 }
 
 region.addEventListener("keydown", (event) => {
-	if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.code)) {
+	if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(event.code)) {
 		event.preventDefault();
 	}
 });
@@ -129,22 +129,27 @@ function dataGet(_world, _map) {
 			chosenRoom.data[i] = 0;
 		}
 		STOP_UPDATE = false;
-		draw();
+		mainLoop();
 	}
 }
 
 let t = 0;
 let lastUpdate;
 const FRAME = 1000.0 / 60.0;
-function draw() {
+const MAX_FRAME_UPDATE = 10;
+function mainLoop() {
 	if (STOP_UPDATE) {
 		STOP_UPDATE = false;
 		return;
 	}
 
-	requestAnimationFrame(draw);
+	requestAnimationFrame(mainLoop);
 
 	let now = Date.now();
+	if (now - lastUpdate > FRAME * MAX_FRAME_UPDATE) {
+		lastUpdate = now - FRAME * MAX_FRAME_UPDATE;
+	}
+
 	while (now - lastUpdate > FRAME) {
 		update();
 		lastUpdate += FRAME;
@@ -212,6 +217,130 @@ function calculateGridSimilarity(oData, tData, width, height) {
 	return maxScore;
 }
 
+function paintN(n) {
+	return (room, x, y) => {
+		room.data[x * room.height + y] = n;
+	};
+}
+
+function floodFillN(n) {
+	return (room, x, y) => {
+		const targetColor = 1 - n;
+		const replacementColor = n;
+
+		const idx = x * room.height + y;
+
+		if (room.data[idx] == targetColor) {
+			const queue = [[x, y]];
+
+			while (queue.length > 0) {
+				const [cx, cy] = queue.shift();
+				const index = cx * room.height + cy;
+				room.data[index] = replacementColor;
+
+				const neighbors = [
+					[cx + 1, cy],
+					[cx - 1, cy],
+					[cx, cy + 1],
+					[cx, cy - 1]
+				];
+
+				for (const [nx, ny] of neighbors) {
+					if (nx >= 0 && nx < room.width && ny >= 0 && ny < room.height) {
+						const neighborIndex = nx * room.height + ny;
+
+						if (room.data[neighborIndex] == targetColor) {
+							room.data[neighborIndex] = replacementColor;
+							queue.push([nx, ny]);
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+canvas.addEventListener("mousedown", e => {
+	e.preventDefault();
+	const q = "KeyQ" in keys;
+	if (q) {
+		qClicked = true;
+	}
+	if (e.button == 0) {
+		paint(cameraX + (e.clientX - window.innerWidth / 2) / cameraZoom, cameraY + (e.clientY - window.innerHeight / 2) / cameraZoom, q ? floodFillN(1) : paintN(1));
+	}
+	if (e.button == 2) {
+		paint(cameraX + (e.clientX - window.innerWidth / 2) / cameraZoom, cameraY + (e.clientY - window.innerHeight / 2) / cameraZoom, q ? floodFillN(0) : paintN(0));
+	}
+});
+
+canvas.addEventListener("click", e => {
+	e.preventDefault();
+});
+
+canvas.addEventListener("contextmenu", e => {
+	e.preventDefault();
+});
+
+canvas.addEventListener("mousemove", e => {
+	if ((e.buttons & 4) > 0) {
+		cameraX -= e.movementX / cameraZoom;
+		cameraY -= e.movementY / cameraZoom;
+	}
+
+	if ((e.buttons & 1) > 0) {
+		paint(cameraX + (e.clientX - window.innerWidth / 2) / cameraZoom, cameraY + (e.clientY - window.innerHeight / 2) / cameraZoom, paintN(1));
+	}
+
+	if ((e.buttons & 2) > 0) {
+		paint(cameraX + (e.clientX - window.innerWidth / 2) / cameraZoom, cameraY + (e.clientY - window.innerHeight / 2) / cameraZoom, paintN(0));
+	}
+});
+
+canvas.addEventListener("wheel", e => {
+	e.preventDefault();
+
+	if (e.ctrlKey) {
+		cameraZoom *= Math.pow(1.01, -e.deltaY);
+	}
+	else {
+		if (!Number.isInteger(e.deltaX) || !Number.isInteger(e.deltaY) || e.deltaX !== 0) {
+			cameraX += e.deltaX / cameraZoom;
+			cameraY += e.deltaY / cameraZoom;
+		} 
+		else {
+			cameraZoom *= Math.pow(1.001, -e.deltaY);
+		}
+	}
+}, { passive: false });
+
+function paint(x, y, func) {
+	for (let room of map.rooms) {
+		if (room != chosenRoom)
+			continue;
+
+		const left = room.devX;
+		const right = room.devX + room.width;
+		const top = -room.devY - room.height;
+		const bottom = -room.devY;
+
+		if (x >= left && x <= right && y >= top && y <= bottom) {
+			const px = Math.floor(x - left);
+			const py = Math.floor(y - top);
+			func(room, px, py);
+			break;
+		}
+	}
+}
+
+window.addEventListener("resize", () => {
+	canvas.width = window.innerWidth;
+	canvas.height = window.innerHeight;
+});
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
 
 let cameraX = 0.0;
 let cameraY = 0.0;
@@ -220,9 +349,10 @@ let cameraMoveSpeed = 8.0;
 let drawType = 1;
 let revealed = false;
 let score;
+let wasQPressed = false;
+let qClicked = false;
 function update() {
-	canvas.width = window.innerWidth;
-	canvas.height = window.innerHeight;
+	ctx.clearRect(0, 0, canvas.width, canvas.height);
 
 	if ("ArrowLeft" in keys) cameraX -= cameraMoveSpeed / cameraZoom;
 	if ("ArrowRight" in keys) cameraX += cameraMoveSpeed / cameraZoom;
@@ -237,72 +367,13 @@ function update() {
 		revealed = true;
 	}
 	if ("Space" in keys) {
-		for (let room of map.rooms) {
-			if (room != chosenRoom)
-				continue;
-
-			const left = room.devX;
-			const right = room.devX + room.width;
-			const top = -room.devY - room.height;
-			const bottom = -room.devY;
-
-			if (cameraX >= left && cameraX <= right && cameraY >= top && cameraY <= bottom) {
-				const x = Math.floor(cameraX - left);
-				const y = Math.floor(cameraY - top);
-				room.data[x * room.height + y] = drawType;
-				break;
-			}
-		}
+		paint(cameraX, cameraY, paintN(drawType));
 	}
-	if ("KeyQ" in keys) {
-		for (let room of map.rooms) {
-			if (room != chosenRoom)
-				continue;
-
-			const left = room.devX;
-			const right = room.devX + room.width;
-			const top = -room.devY - room.height;
-			const bottom = -room.devY;
-
-			if (cameraX >= left && cameraX <= right && cameraY >= top && cameraY <= bottom) {
-				const startX = Math.floor(cameraX - left);
-				const startY = Math.floor(cameraY - top);
-
-				const targetColor = 1 - drawType;
-				const replacementColor = drawType;
-
-				const startIndex = startX * room.height + startY;
-
-				if (room.data[startIndex] == targetColor) {
-					const queue = [[startX, startY]];
-
-					while (queue.length > 0) {
-						const [cx, cy] = queue.shift();
-						const index = cx * room.height + cy;
-						room.data[index] = replacementColor;
-
-						const neighbors = [
-							[cx + 1, cy],
-							[cx - 1, cy],
-							[cx, cy + 1],
-							[cx, cy - 1]
-						];
-
-						for (const [nx, ny] of neighbors) {
-							if (nx >= 0 && nx < room.width && ny >= 0 && ny < room.height) {
-								const neighborIndex = nx * room.height + ny;
-
-								if (room.data[neighborIndex] == targetColor) {
-									room.data[neighborIndex] = replacementColor;
-									queue.push([nx, ny]);
-								}
-							}
-						}
-					}
-				}
-				break;
-			}
-		}
+	if (!("KeyQ" in keys) && wasQPressed && !qClicked) {
+		paint(cameraX, cameraY, floodFillN(drawType));
+	}
+	if (!("KeyQ" in keys)) {
+		qClicked = false;
 	}
 
 
@@ -389,6 +460,7 @@ function update() {
 	ctx.beginPath();
 	ctx.arc(canvas.width / 2, canvas.height / 2, 2.0, 0, Math.PI * 2.0);
 	ctx.fill();
+	wasQPressed = "KeyQ" in keys;
 }
 
 region.selectedIndex = Math.floor(Math.random() * region.options.length);
